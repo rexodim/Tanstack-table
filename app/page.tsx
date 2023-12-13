@@ -1,113 +1,167 @@
-import Image from 'next/image'
+"use client";
+import React, { useState } from "react";
+import FilterPill from "@/app/components/FilterPill";
+import DataTable from "@/app/components/DataTable";
+import { Modal, ModalContent, ModalFooter, ModalTitle } from "@/app/components/Modal";
+import Button from "@/app/components/Button";
+import { IRequest, Status } from "@/app/types";
+import StatusState from "@/app/components/StatusState";
+import { format, parseISO } from "date-fns";
+import {
+  createColumnHelper,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import Input from "@/app/components/Input";
+import Select from "@/app/components/Select";
+import useRequests from "@/app/hooks/useRequests";
 
-export default function Home() {
+const STATUS_OPTIONS = [
+  { label: Status.Draft, value: Status.Draft },
+  { label: Status.Pending, value: Status.Pending },
+  { label: Status.Complete, value: Status.Complete },
+];
+
+const columnHelper = createColumnHelper<IRequest>();
+
+const columns = [
+  columnHelper.accessor("id", {
+    header: "Request Id",
+    cell: (info) => info.getValue(),
+    minSize: 115,
+  }),
+  columnHelper.accessor("status", {
+    header: "Progress",
+    cell: (info) => <StatusState value={info.getValue()} />,
+    minSize: 115,
+  }),
+  columnHelper.accessor((row) => row.item, {
+    header: "Item",
+    cell: (info) => info.getValue(),
+    minSize: 400,
+  }),
+  columnHelper.accessor((row) => row.createdAt, {
+    header: "Created At",
+    cell: (info) => format(parseISO(info.renderValue() as string), "MMM d, yyyy h:mm a"),
+    minSize: 400,
+  }),
+];
+
+const Home = () => {
+  const [modalsState, setModalsState] = useState({
+    status: false,
+    request: false,
+  });
+  const [status, setStatus] = useState("");
+  const [requestId, setRequestId] = useState("");
+
+  const { data = [], isLoading } = useRequests();
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const openStatusModal = () => {
+    setModalsState({ status: true, request: false });
+  };
+
+  const openRequestModal = () => {
+    setModalsState({ status: false, request: true });
+  };
+
+  const handleApplyStatusFilter = () => {
+    table.getColumn("status")?.setFilterValue(status);
+    setModalsState((prev) => ({ ...prev, status: false }));
+  };
+
+  const handleApplyRequestIdFilter = () => {
+    if (+requestId) {
+      table.getColumn("id")?.setFilterValue(() => [+requestId, +requestId]);
+    } else {
+      table.getColumn("id")?.setFilterValue(undefined);
+    }
+    setModalsState((prev) => ({ ...prev, request: false }));
+  };
+
+  const handleDeleteStatusFilter = () => {
+    table.getColumn("status")?.setFilterValue(undefined);
+    setStatus("");
+  };
+
+  const handleDeleteRequestIdFilter = () => {
+    table.getColumn("id")?.setFilterValue(undefined);
+    setRequestId("");
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+    <main className="m-8 min-h-screen">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <FilterPill
+              field="State"
+              value={table.getColumn("status")?.getFilterValue() as string}
+              handleAddClick={openStatusModal}
+              handleDeleteClick={handleDeleteStatusFilter}
             />
-          </a>
+            <Modal
+              close={() => setModalsState((prev) => ({ ...prev, status: false }))}
+              open={modalsState.status}
+              position={{ top: 32, left: 0 }}
+              disableBackdrop
+            >
+              <ModalTitle>Filter by State</ModalTitle>
+              <ModalContent>
+                <div className="flex flex-row items-center justify-between gap-2">
+                  <label className="w-max text-sm font-normal leading-[125%] text-gray-light">Is equal to:</label>
+                  <Select value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
+                </div>
+              </ModalContent>
+              <ModalFooter>
+                <Button fullWidth disabled={!status} onClick={handleApplyStatusFilter}>
+                  Apply
+                </Button>
+              </ModalFooter>
+            </Modal>
+          </div>
+          <div className="relative">
+            <FilterPill
+              value={((table.getColumn("id")?.getFilterValue() as string[]) || [""])[0]}
+              field="Request ID"
+              handleAddClick={openRequestModal}
+              handleDeleteClick={handleDeleteRequestIdFilter}
+            />
+            <Modal
+              open={modalsState.request}
+              close={() => setModalsState((prev) => ({ ...prev, request: false }))}
+              position={{ top: 32, left: 0 }}
+              disableBackdrop
+            >
+              <ModalTitle>Filter by Request ID</ModalTitle>
+              <ModalContent>
+                <div className="flex flex-row items-center justify-between gap-2">
+                  <label className="w-max text-sm font-normal leading-[125%] text-gray-light">Is equal to:</label>
+                  <Input value={requestId} onChange={(e) => setRequestId(e.target.value)} />
+                </div>
+              </ModalContent>
+              <ModalFooter>
+                <Button fullWidth disabled={!requestId} onClick={handleApplyRequestIdFilter}>
+                  Apply
+                </Button>
+              </ModalFooter>
+            </Modal>
+          </div>
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+        <DataTable table={table} loading={isLoading} />
       </div>
     </main>
-  )
-}
+  );
+};
+
+export default Home;
